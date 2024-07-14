@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -11,6 +12,14 @@ import (
 )
 
 const defaultPort = "8080"
+
+func restHandler(w http.ResponseWriter, req *http.Request) {
+
+}
+
+func gqlHandler(w http.ResponseWriter, req *http.Request) {
+
+}
 
 func main() {
 
@@ -74,6 +83,10 @@ func main() {
 		log.Printf("Failed to create queue.\r\n")
 		os.Exit(-6)
 	}
+
+	// create the different API handlers.
+	http.HandleFunc("/api", restHandler)
+	http.HandleFunc("/graphql", gqlHandler)
 
 	// define a context for the publishing.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
