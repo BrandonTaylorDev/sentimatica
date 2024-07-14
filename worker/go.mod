@@ -1,4 +1,4 @@
-module github.com/BrandonTaylorDev/sentimatica/edge
+module github.com/BrandonTaylorDev/sentimatica/worker
 
 go 1.22.5
 
