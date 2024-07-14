@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -13,12 +14,37 @@ import (
 
 const defaultPort = "8080"
 
-func restHandler(w http.ResponseWriter, req *http.Request) {
+func publishMessage(channel *amqp.Channel, queue *amqp.Queue, writer *http.ResponseWriter, request *http.Request) {
 
-}
+	// define a context for the publishing.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-func gqlHandler(w http.ResponseWriter, req *http.Request) {
+	// get the request body.
+	b, err := io.ReadAll(request.Body)
+	if err != nil {
+		log.Println("[x] Failed to read request body:", err.Error())
+		return
+	}
 
+	// publish the message.
+	err = channel.PublishWithContext(ctx,
+		"",         // exchange
+		queue.Name, // routing key
+		false,      // mandatory
+		false,      // immediate
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        b,
+		},
+	)
+	if err != nil {
+		log.Printf("Failed to publish message to queue.\r\n")
+		os.Exit(-7)
+	}
+
+	log.Printf("[x] Sent %s\n", string(b))
+	(*writer).Write(b)
 }
 
 func main() {
@@ -84,29 +110,17 @@ func main() {
 		os.Exit(-6)
 	}
 
-	// create the different API handlers.
-	http.HandleFunc("/api", restHandler)
-	http.HandleFunc("/graphql", gqlHandler)
+	// create the RESTful API handler.
+	http.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
+		publishMessage(channel, &queue, &w, r)
+	})
 
-	// define a context for the publishing.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	// create the GraphQL API handler.
+	http.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
+		publishMessage(channel, &queue, &w, r)
+	})
 
-	body := "Hello World!"
-	err = channel.PublishWithContext(ctx,
-		"",         // exchange
-		queue.Name, // routing key
-		false,      // mandatory
-		false,      // immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(body),
-		},
-	)
-	if err != nil {
-		log.Printf("Failed to publish message to queue.\r\n")
-		os.Exit(-7)
-	}
-
-	log.Printf(" [x] Sent %s\n", body)
+	// start the webserver.
+	log.Printf("[x] Starting webserver on port %s.\r\n", port)
+	http.ListenAndServe(":"+port, nil)
 }
